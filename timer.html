@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Trainigs-Timer</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --accent-color: #c300ff;
+            --text-color: #ffffff;
+        }
+
+        /* Verhindert die weißen Balken oben und unten */
+        html, body {
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #timer-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        #timer {
+            font-size: 35vmin;
+            font-weight: 100;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+            letter-spacing: -5px;
+            text-shadow: 0 0 50px rgba(255, 255, 255, 0.05);
+        }
+
+        .controls {
+            /* Nutzt den Platz bis ganz nach unten, inkl. iPhone Home-Balken Bereich */
+            padding-bottom: calc(30px + env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .main-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+            font-family: inherit;
+        }
+
+        .btn-start {
+            background: #ffffff;
+            color: #000;
+            padding: 16px 45px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .btn-reset {
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+            padding: 16px 25px;
+            border-radius: 14px;
+            font-size: 14px;
+        }
+
+        button:active {
+            transform: scale(0.96);
+            opacity: 0.8;
+        }
+
+        #progress-container {
+            width: 60%;
+            height: 2px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--accent-color);
+            box-shadow: 0 0 10px var(--accent-color);
+            transition: width 1s linear;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="timer-container">
+        <div id="timer">10:00</div>
+    </div>
+    
+    <div class="controls">
+        <div id="progress-container"><div id="progress-bar"></div></div>
+        <div class="main-buttons">
+            <button id="resetBtn" class="btn-reset">RESET</button>
+            <button id="startBtn" class="btn-start">START</button>
+        </div>
+    </div>
+
+    <script>
+        let timeLeft = 600;
+        let timerId = null;
+        let audioCtx = null;
+        let wakeLock = null;
+
+        async function toggleWakeLock(on) {
+            if ('wakeLock' in navigator) {
+                try {
+                    if (on) wakeLock = await navigator.wakeLock.request('screen');
+                    else if (wakeLock) wakeLock.release();
+                } catch (e) {}
+            }
+        }
+
+        function playTone(freq, type, dur) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+            osc.connect(g);
+            g.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + dur);
+        }
+
+        function update() {
+            const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const s = (timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('timer').textContent = `${m}:${s}`;
+            document.getElementById('progress-bar').style.width = ((600 - timeLeft) / 600 * 100) + "%";
+        }
+
+        document.getElementById('startBtn').onclick = function() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            if (timerId) {
+                clearInterval(timerId);
+                timerId = null;
+                this.textContent = "CONTINUE";
+                toggleWakeLock(false);
+                return;
+            }
+
+            toggleWakeLock(true);
+            this.textContent = "PAUSE";
+            
+            timerId = setInterval(() => {
+                timeLeft--;
+                update();
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    playTone(440, 'square', 2);
+                    this.textContent = "START";
+                } else if (timeLeft % 60 === 0) {
+                    playTone(880, 'sine', 0.4);
+                }
+            }, 1000);
+        };
+
+        document.getElementById('resetBtn').onclick = () => location.reload();
+        update();
+    </script>
+</body>
+</html>
